@@ -30,37 +30,25 @@ methods
 	% corresponding to contributions of all 2D subunits (for which it fits the gains and translates this to the 
 	% output of each NL2d
 	
-		[nimtmp,Xstims_mod] = xnim.convert2NIM( Xstims );
+		Nstims = length(Xstims);
 		N2d = length(xnim.TwoDsubunits);
-		Nstims = length(Xstim);
-
-		if N2d > 0
-			% Make X-matrix for 2D-subunits
-			NT = size(Xstims,1);
-			Xstims{Nstims+1} = zeros( NT, N2d );
-			for nn = 1:N2d
-				Xstims{Nstims+1}(:,nn) = xnim.Two2subunits(nn).process_stim( Xstims );
-			end
-			% Update stim_params
-			nimtmp.stim_params(Nstims+1) = nimtmp.stim_params(1);
-			nimtmp.stim_params(Nstims+1).dims = [1 N2d 1];
-			% Add gain-module
-			nimtmp = nimtmp.add_subunits( {'lin'}, 1, 'xtargs',Nstims+1, 'init_filts', {ones(N2d,1)} );
-		end
+		
+		% Convert to NIM with 2D-subunit output calculated
+		[nimtmp,Xstims_mod] = xnim.convert2NIM( Xstims );
 		
 		% Fit filters of all regular subunits
-		nimtmp = nimtmp.fit_filters( Robs, Xstims, varargin{:} );
+		nimtmp = nimtmp.fit_filters( Robs, Xstims_mod, varargin{:} );
 		
 		xnim_out = XNIM( nimtmp ); % translate back to XNIM
 
+		% Copy 2D-subunits, with potential gain changes
 		if N2d > 0
 			xnim_out.subunits = xnim_out.subunits(1:end-1);  % remove extra gain-subunit
 			xnim_out.TwoDsubunits = xnim.TwoDsubunits;
 			for nn = 1:N2d
-				xnim_out.TwoDsubunits.NL2d = xnim_out.TwoDsubunits.NL2d * nimtemp.subunits(Nstims+1).filtK(nn);
+				xnim_out.TwoDsubunits.NL2d = xnim_out.TwoDsubunits.NL2d * nimtemp.subunits(Nstims+nn).filtK;
 			end
 		end
-		
 	end
 	
 	function xnim = fit_2dfilters( xnim, Robs, Xstims, varargin )
