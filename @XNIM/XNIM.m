@@ -4,30 +4,31 @@ classdef XNIM < NIM
 
 properties
     twoD_subunits;
-end
-
-properties (Hidden)
-    version = '0.0';
-    create_on = date;
-end
-
-% Methods defined in other files
-methods (Static)
-    flag = point_in_triangle(P, A, B, C); 
-    lambda = barycentric(P, A, B, C); % calculates barycenteric coordinate of point P with respect to triangle ABC
+    % Inherits from NIM:
+    % - spkNL
+    % - subunits
+    % - stim_params
+    % - noise_dist
+    % - spk_hist
+    % - fit_props
+    % - fit_history
 end
 
 %% *************************** constructor ********************************
 methods
 
     function xnim = XNIM(nim)
-    % Usage: xnim = XNIM( nim )
+    % Usage: xnim = XNIM(nim)
 
-    nimfields = fields(nim);
-    for nn = 1:length(nimfields)
-        xnim.(nimfields{nn}) = nim.(nimfields{nn});
+    nim_fields = fields(nim);
+    for nn = 1:length(nim_fields)
+        xnim.(nim_fields{nn}) = nim.(nim_fields{nn});
     end
-    xnim.TwoDsubunits = [];
+    xnim.twoD_subunits = [];
+    
+    % change superclass properties
+    xnim.allowed_reg_types = {'d2xy', 'l2'};
+    xnim.version = '0.0';
     
     end % method
     
@@ -84,6 +85,92 @@ end
 %% *************************** helper methods *****************************
 methods
     
+    function xnim = add_2d_subunit(xnim, subunit_1, subunit_2, Xstims, varargin)
+    % Usage: xnim = xnim.add_2d_subunit(subunit_1, subunit_2, Xstims, varargin)
+    % Takes two SUBUNIT inputs (probably from an NIM) and converts them
+    % into a TWODSUBUNIT
+    %
+    % INPUTS:
+    %   subunit_1:  SUBUNIT object
+    %   subunit_2:  SUBUNIT object
+    %   Xstims:     cell array of stimulus matrices
+    %
+    %   optional arguments:
+    %       'interaction':  string specifying initial type of interaction.
+    %                       'add' or 'mult'. Default is 'add'.
+    %       'Nbins':        2x1 cell array or scalar defining number of 
+    %                       bins to represent each dimension.
+    %
+    % OUTPUTS:
+    %   xnim:   updated XNIM object
+    
+    defaults.interaction = 'add';
+    fields_to_remove = 'interaction';
+    [~, parsed_options, modvarargin] = NIM.parse_varargin(varargin, fields_to_remove, defaults);
+    ks{1} = subunit_1.filtK;
+    ks{2} = subunit_2.filtK;
+    Xtargs{1} = subunit_1.Xtarg;
+    Xtargs{2} = subunit_2.Xtarg;
+    
+    % initialize 2D subunit
+    xnim.twoD_subunits(end+1) = TWODSUBUNIT(ks, Xstims, 'Xtargs', Xtargs, modvarargin{:});
+    
+    % initialize nonlinearity
+    xnim.twoD_subunits(end) = xnim.twoD_subunits(end).init_NL2D(parsed_options.interaction);
+        
+    end
+    
+    function xnim = convert_to_2d_subunit(xnim, sub_indx_1, sub_indx_2, Xstims, varargin)
+    % Usage: xnim = xnim.add_2d_subunit(sub_indx_1, sub_indx_2, Xstims, varargin)
+    % Takes two SUBUNITS from the current XNIM object and converts them
+    % into a TWODSUBUNIT, and deletes the original SUBUNITS
+    %
+    % INPUTS:
+    %   sub_indx_1:  index into subunits property of xnim
+    %   sub_indx_2:  index into subunits property of xnim
+    %   Xstims:      cell array of stimulus matrices
+    %
+    %   optional arguments:
+    %       'interaction':  string specifying initial type of interaction.
+    %                       'add' or 'mult'. Default is 'add'.
+    %       'Nbins':        2x1 cell array or scalar defining number of 
+    %                       bins to represent each dimension.
+    %
+    % OUTPUTS:
+    %   xnim:   updated XNIM object
+    
+    % make sure there are enough subunits
+    if length(xnim.subunits) < 2
+        error('Not enough subunits to convert to TWODSUBNIT')
+    end
+    
+    defaults.interaction = 'add';
+    fields_to_remove = 'interaction';
+    [~, parsed_options, modvarargin] = NIM.parse_varargin(varargin, fields_to_remove, defaults);
+    ks{1} = xnim.subunits(sub_indx_1).filtK;
+    ks{2} = xnim.subunits(sub_indx_2).filtK;
+    Xtargs{1} = xnim.subunits(sub_indx_1).Xtarg;
+    Xtargs{2} = xnim.subunits(sub_indx_2).Xtarg;
+    
+    % initialize 2D subunit
+    xnim.twoD_subunits = cat(1, xnim.twoD_subunits, TWODSUBUNIT(ks, Xstims, 'Xtargs', Xtargs, modvarargin{:}));
+    
+    % initialize nonlinearity
+    xnim.twoD_subunits(end) = xnim.twoD_subunits(end).init_NL2d(parsed_options.interaction);
+    
+    % get rid of converted SUBUNITS; make sure to do so in proper order
+    if sub_indx_1 > sub_indx_2
+        xnim.subunits(sub_indx_1) = [];
+        xnim.subunits(sub_indx_2) = [];
+    elseif sub_indx_1 < sub_indx_2
+        xnim.subunits(sub_indx_2) = [];
+        xnim.subunits(sub_indx_1) = [];
+    else
+        xnim.subunits(sub_indx_1) = []; % same subunit
+    end
+    
+    end
+    
     function [LL, pred_rate, mod_internals, LL_data] = eval_model( xnim, Robs, Xstims, varargin )
 	% Usage: [LL, pred_rate, mod_internals, LL_data] = xnim.eval_model( Robs, Xstims, <eval_inds>, varargin ) 
 	
@@ -106,34 +193,34 @@ methods (Hidden)
 
     function [nim,Xstims] = convert2NIM( xnim, Xstims )
     % Usage: nim = xnim.convert2NIM( <Xstims> )
-    % Allows NIM function calls (that are not overloaded by XNIM
+    % Allows NIM function calls (that are not overloaded by XNIM)
 
     if nargin < 2
         Xstims = [];
     end
 
     nim = NIM();
-    nimfields = fields(xnim);
-    for nn = 1:length(nimfields)
-        if ~strcmp(nimfields{nn},'TwoDsubunits')
-            nim.(nimfields{nn}) = xnim.(nimfields{nn});
+    nim_fields = fields(xnim);
+    for nn = 1:length(nim_fields)
+        if ~strcmp(nim_fields{nn},'twoD_subunits')
+            nim.(nim_fields{nn}) = xnim.(nim_fields{nn});
         end
     end
 
     % Add additional subunit to NIM to capture 2Dsubunit contributions
-    N2d = length(xnim.TwoDsubunits);
+    N2d = length(xnim.twoD_subunits);
     if (N2d > 0) && ~isempty(Xstims)
         % Make X-matrix for 2D-subunits
         Nstims = length(Xstims);
         NT = size(Xstims{1},1);
-        gain_stim_param = nimtmp.stim_params(1);
+        gain_stim_param = nim.stim_params(1);
         gain_stim_params.dims = [1 1 1];
 
         for nn = 1:N2d
-            Xstims{Nstims+nn} = xnim.Two2subunits(nn).process_stim( Xstims );
+            Xstims{Nstims+nn} = xnim.twoD_subunits(nn).process_stim( Xstims );
             nim.stim_params(Nstims+nn) = gain_stim_params;
             % Add gain-modules
-            nim = nim.add_subunits( {'lin'}, 1, 'xtargs',Nstims+nn, 'init_filts', {[1]} );
+            nim = nim.add_subunits({'lin'}, 1, 'xtargs', Nstims+nn, 'init_filts', {[1]});
         end
     end
 
