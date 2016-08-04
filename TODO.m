@@ -2,9 +2,10 @@
 %   - (DONE 08/02/16) constructor
 %   - fit_filters
 %   - fit_2dfilters
-%   - fit_2dNL
+%   - (DONE 08/03/16) fit_2dNL
 %   - eval_model
 %   - convert2NIM
+%   - (DONE 08/03/16) format4NIMfitting
 %
 % TWODSUBUNIT
 %   - (DONE 08/02/16) constructor

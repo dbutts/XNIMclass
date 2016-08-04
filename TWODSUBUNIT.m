@@ -25,27 +25,28 @@ methods
     %   optional arguments:
     %     'Xtargs': 2x1 cell array of X-target indices for subunit. Default
     %               will be 1
-    %     'Nbins':  2x1 cell array or scalar defining number of bins to 
-    %               represent each dimension.
+    %     'Nticks': 2x1 cell array or scalar defining number of 
+    %               ticks/coeffs to represent each dimension.
+    %     'ticks':  2x1 cell array of tick values for each dimension
 
     % parse input options
     defaults.Xtargs = {1, 1};
-    defaults.Nbins = {20, 20};
+    defaults.Nticks = {21, 21}; % 20 bins
     [~, parsed_options] = NIM.parse_varargin(varargin, [], defaults);
     
-    % get proper number of bins
-    if ~iscell(parsed_options.Nbins) && isscalar(parsed_options.Nbins)
+    % get proper number of ticks
+    if ~iscell(parsed_options.Nticks) && isscalar(parsed_options.Nticks)
         % duplicate scalar values if supplied
-        Nbins{1} = parsed_options.Nbins;
-        Nbins{2} = parsed_options.Nbins;
+        Nticks{1} = parsed_options.Nticks;
+        Nticks{2} = parsed_options.Nticks;
     else
-        assert(iscell(parsed_options.Nbins), ...
-            'Nbins must be a 2x1 cell array or scalar')
-        Nbins = parsed_options.Nbins;
+        assert(iscell(parsed_options.Nticks), ...
+            'Nticks must be a 2x1 cell array or scalar')
+        Nticks = parsed_options.Nticks;
     end
     
     % Set XNIM properties
-    subunit.NL2d = zeros(Nbins{1}, Nbins{2});
+    subunit.NL2d = zeros(Nticks{1}, Nticks{2});
     
     subunit.ks = ks;
     if length(ks) < 2
@@ -66,9 +67,9 @@ methods
     
     % Establish scale of filters (and NL-resolution); will go to plus/minus
     % 3-stds
-    subunit = subunit.normalize_filters( Xstims );
-    dx = 6.0/Nbins{1};
-    dy = 6.0/Nbins{2};
+    subunit = subunit.normalize_filters(Xstims);
+    dx = 6.0/(Nticks{1}-1);
+    dy = 6.0/(Nticks{2}-1);
     subunit.ticks{1} = -3:dx:3;
     subunit.ticks{2} = -3:dy:3;
     
@@ -151,8 +152,8 @@ methods
     dxdy_out = zeros(NT,2);
 
     % go through all bins
-    for x=1:NNx-1
-        for y=1:NNy-1                    
+    for x=1:Nx-1
+        for y=1:Ny-1                    
 
             % data points in the current bin
             inds = find(binx(:) == x & biny(:) == y);
@@ -221,7 +222,7 @@ methods
     function [] = display_NL(subunit, varargin)
     % Usage: [] = display_NL(subunit, varargin)
     
-    imagesc(subunit.ticks{x}, subunit.ticks{y}, subunit.NL2d)
+    imagesc(subunit.ticks{1}, subunit.ticks{2}, subunit.NL2d)
     xlabel('X-dir')
     ylabel('Y-dir')
     set(gca, 'Ydir', 'normal')
@@ -384,15 +385,19 @@ end
 %% *************************** static methods *****************************
 methods (Static)
     
-	function reg_lambdas = init_reg_lambdas()
-    % Usage: reg_lambdas = TWODSUBUNIT.init_reg_lambdas()
-	% Creates reg_lambdas struct and sets default values to 0, for use in
-	% XNIM constructor
+    function reg_lambdas = init_reg_lambdas()
+    % Usage: reg_lambdas = init_reg_lambdas()
+	% Creates reg_lambdas struct and sets default values to 0; this method
+	% comes from the SUBUNIT class and should be kept up to date with it,
+	% else fit_NL2d won't work.
      
-    reg_lambdas.d2xy = 0; % 2D spatial laplacian to smooth basis coefficients
-    reg_lambdas.l2 = 0;   % L2 on basis coefficients
-    
-    end % methods
+		reg_lambdas.nld2 = 0; %second derivative of tent basis coefs
+		reg_lambdas.d2xt = 0; %spatiotemporal laplacian
+		reg_lambdas.d2x = 0; %2nd spatial deriv
+		reg_lambdas.d2t = 0; %2nd temporal deriv
+		reg_lambdas.l2 = 0; %L2 on filter coefs
+		reg_lambdas.l1 = 0; %L1 on filter coefs
+    end
     
     function lambda = barycentric(P, A, B, C)
     % Usage: lambda = TWODSUBUNIT.barycentric(P, A, B, C)
