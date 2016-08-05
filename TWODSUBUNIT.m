@@ -65,13 +65,24 @@ methods
         subunit.Xtargs = parsed_options.Xtargs;
     end
     
-    % Establish scale of filters (and NL-resolution); will go to plus/minus
-    % 3-stds
-    subunit = subunit.normalize_filters(Xstims);
-    dx = 6.0/(Nticks{1}-1);
-    dy = 6.0/(Nticks{2}-1);
-    subunit.ticks{1} = -3:dx:3;
-    subunit.ticks{2} = -3:dy:3;
+    % Establish scale of filters (and NL-resolution)
+    if 0
+        % will go to plus/minus 3-stds
+        subunit = subunit.normalize_filters(Xstims);
+        dx = 6.0/(Nticks{1}-1);
+        dy = 6.0/(Nticks{2}-1);
+        subunit.ticks{1} = -3:dx:3;
+        subunit.ticks{2} = -3:dy:3;
+    else
+        % will go between 1st and 99th percentile - more appropriate for 2p
+        % data
+%         subunit = subunit.normalize_filters(Xstims);
+        gs = subunit.apply_filters(Xstims);
+        prctiles = prctile(gs(:,1), [1, 99]);
+        subunit.ticks{1} = linspace(prctiles(1), prctiles(2), Nticks{1});
+        prctiles = prctile(gs(:,2), [1, 99]);
+        subunit.ticks{2} = linspace(prctiles(1), prctiles(2), Nticks{2});
+    end
     
     subunit.reg_lambdas = TWODSUBUNIT.init_reg_lambdas(); % set all to zero
     subunit.Ksign_con = {[], []};
@@ -96,7 +107,7 @@ methods
     function sub_output = apply_NL(subunit, gen_signals)
     % Usage: sub_output = subunit.apply_NL(gen_signals)
 
-    Xmat = subunit.make_NL2D_Xmat(gen_signals); % produce X-matrix
+    Xmat = subunit.make_NL2d_Xmat(gen_signals); % produce X-matrix
     sub_output = Xmat*subunit.NL2d(:);
     
     end
@@ -192,7 +203,7 @@ methods
     function sub_output = process_stim(subunit, Xstims)
     % Usage: sub_output = subunit.process_stim(Xstims)
 
-    sub_output = subunit.apply_NL(subunit.apply_filter(Xstims));
+    sub_output = subunit.apply_NL(subunit.apply_filters(Xstims));
     
     end % method
 
@@ -212,21 +223,33 @@ methods
     assert( plotloc(3) < prod(plotloc(1:2)), 'Invalid plot location.')
 
     subplot(plotloc(1), plotloc(2), plotloc(3));
-    imagesc(reshape(subunit.ks{1}, dims(1:2)));
+    if (dims{1}(1) > 1) && (dims{1}(2) > 1)
+        filt = reshape(subunit.ks{1}, dims{1}(1:2));
+        M = max(abs(filt(:)));
+        imagesc(filt, [-M, M]);
+    else
+        plot(subunit.ks{1});
+    end
 
     subplot(plotloc(1), plotloc(2), plotloc(3)+1);
-    imagesc(reshape(subunit.ks{2}, dims(1:2)));
+    if (dims{2}(1) > 1) && (dims{2}(2) > 1)
+        imagesc(reshape(subunit.ks{2}, dims{2}(1:2)));
+    else
+        plot(subunit.ks{2});
+    end
 
     end % method
 
     function [] = display_NL(subunit, varargin)
     % Usage: [] = display_NL(subunit, varargin)
     
-    imagesc(subunit.ticks{1}, subunit.ticks{2}, subunit.NL2d)
+    M = max(abs(subunit.NL2d(:)));
+    imagesc(subunit.ticks{1}, subunit.ticks{2}, subunit.NL2d', [-M, M])
     xlabel('X-dir')
     ylabel('Y-dir')
     set(gca, 'Ydir', 'normal')
     colorbar;
+    colormap(jet);
     
     end % method
 
@@ -268,7 +291,7 @@ methods (Hidden)
     
     end % method
 
-    function [NLoutput, Counts, binx, biny] = make_NL2D_Xmat(subunit, gen_signals)
+    function [NLoutput, Counts, binx, biny] = make_NL2d_Xmat(subunit, gen_signals)
     % calculates output of 2D nonlinearity with respect to subunit.NL2d
     % coefficients.
     %
@@ -277,7 +300,7 @@ methods (Hidden)
     %
     % Output:
     %       NLoutput:       NTxNpar matrix, where Npar = Nbins_x*Nbins_y
-    %       Counts:         Nbins_x+1 x Nbins_y+1 matrix, number of samples
+    %       Counts:         ticks{1} x ticks{2} matrix, number of samples
     %                       per vertex
     %
     % Yuwei Cui, Created by Oct 20, 2012
