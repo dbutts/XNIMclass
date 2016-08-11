@@ -53,13 +53,13 @@ end
 figure;
 subplot(131)
 myimagesc(nl);
-title('Function')
+title('true func')
 subplot(132)
 myimagesc(dnl(:,:,1));
-title('x derivative')
+title('true x-deriv')
 subplot(133)
 myimagesc(dnl(:,:,2));
-title('y derivative')
+title('true y-deriv')
 
 %% fit XNIM
 
@@ -87,7 +87,8 @@ xnim.twoD_subunits.ticks{2} = a:((b-a)/(num_ticks-1)):b;
 xnim.twoD_subunits.ks{1} = 1;
 xnim.twoD_subunits.ks{2} = 1;
 
-xnim.twoD_subunits.reg_lambdas.l2 = 1;
+xnim.twoD_subunits.reg_lambdas.d2xt = 1; % looks great with only 500 obs
+% xnim.twoD_subunits.reg_lambdas.l2 = 1; % looks much worse
 
 % fit model
 xnim = xnim.fit_NL2d(output, Xstims);
@@ -97,7 +98,10 @@ dxdy = xnim.twoD_subunits(1).apply_NL_deriv([X(:), Y(:)]);
 figure;
 subplot(131)
 myimagesc(xnim.twoD_subunits(1).NL2d);
+title('est. func')
 subplot(132)
 myimagesc(reshape(dxdy(:,1), num_ticks, num_ticks));
+title('est. x-deriv')
 subplot(133)
 myimagesc(reshape(dxdy(:,2), num_ticks, num_ticks));
+title('est. y-deriv')
