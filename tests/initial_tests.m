@@ -94,7 +94,7 @@ xnim.twoD_subunits.reg_lambdas.d2xt = 1; % looks great with only 500 obs
 xnim = xnim.fit_NL2d(output, Xstims);
 
 % plot results
-dxdy = xnim.twoD_subunits(1).apply_NL_deriv([X(:), Y(:)]);
+dxAdy = xnim.twoD_subunits(1).apply_NL_deriv([X(:), Y(:)]);
 figure;
 subplot(131)
 myimagesc(xnim.twoD_subunits(1).NL2d);

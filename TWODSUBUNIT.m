@@ -14,142 +14,144 @@ end
 %% *************************** constructor ********************************
 methods
 
-    function subunit = TWODSUBUNIT(ks, Xstims, varargin)
-    % Usage: sub2d = TWODSUBUNIT(ks, Xstims, varargin)
-    %
-    % INPUTS:
-    %   ks:     2x1 cell array of filter coefficients. If has one element, 
-    %           then second filter is delayed (3 lags) version of the first
-    %   Xstims: cell array of stimulus matrices
-    %
-    %   optional arguments:
-    %     'Xtargs': 2x1 cell array of X-target indices for subunit. Default
-    %               will be 1
-    %     'Nticks': 2x1 cell array or scalar defining number of 
-    %               ticks/coeffs to represent each dimension.
-    %     'ticks':  2x1 cell array of tick values for each dimension
+	function subunit = TWODSUBUNIT(ks, Xstims, varargin)
+	% Usage: sub2d = TWODSUBUNIT(ks, Xstims, varargin)
+	%
+	% INPUTS:
+	%   ks:     2x1 cell array of filter coefficients. If has one element, 
+	%           then second filter is delayed (3 lags) version of the first
+	%   Xstims: cell array of stimulus matrices
+	%
+	%   optional arguments:
+	%     'Xtargs': 2x1 cell array of X-target indices for subunit. Default
+	%               will be 1
+	%     'Nticks': 2x1 cell array or scalar defining number of ticks/coeffs to represent each dimension.
+	%     'ticks':  2x1 cell array of tick values for each dimension
 
-    % parse input options
-    defaults.Xtargs = {1, 1};
-    defaults.Nticks = {21, 21}; % 20 bins
-    [~, parsed_options] = NIM.parse_varargin(varargin, [], defaults);
+		% Parse input options
+		defaults.Xtargs = {1,1};
+		defaults.Nticks = {21,21}; % 20 bins
+		[~, parsed_options] = NIM.parse_varargin(varargin, [], defaults);
     
-    % get proper number of ticks
-    if ~iscell(parsed_options.Nticks) && isscalar(parsed_options.Nticks)
-        % duplicate scalar values if supplied
-        Nticks{1} = parsed_options.Nticks;
-        Nticks{2} = parsed_options.Nticks;
-    else
-        assert(iscell(parsed_options.Nticks), ...
-            'Nticks must be a 2x1 cell array or scalar')
-        Nticks = parsed_options.Nticks;
-    end
+		% Get proper number of ticks
+		if ~iscell(parsed_options.Nticks) && isscalar(parsed_options.Nticks)
+			% duplicate scalar values if supplied
+			Nticks{1} = parsed_options.Nticks;
+			Nticks{2} = parsed_options.Nticks;
+		else
+			assert(iscell(parsed_options.Nticks), 'Nticks must be a 2x1 cell array or scalar')
+			Nticks = parsed_options.Nticks;
+		end
     
-    % Set XNIM properties
-    subunit.NL2d = zeros(Nticks{1}, Nticks{2});
+		% Set XNIM properties
+		subunit.NL2d = zeros(Nticks{1}, Nticks{2});
     
-    subunit.ks = ks;
-    if length(ks) < 2
-        subunit.ks{2} = subunit.ks{1};
-        subunit.ks{2}(3:end) = subunit.ks{1}(1:end-2);
-        subunit.ks{2}(1:2) = 0;
-    end
+		subunit.ks = ks;
+		if length(ks) < 2
+			subunit.ks{2} = subunit.ks{1};
+			subunit.ks{2}(3:end) = subunit.ks{1}(1:end-2);
+			subunit.ks{2}(1:2) = 0;
+		end
     
-    if ~iscell(parsed_options.Xtargs) && isscalar(parsed_options.Xtargs)
-        % duplicate scalar values if supplied
-        subunit.Xtargs{1} = parsed_options.Xtargs;
-        subunit.Xtargs{2} = parsed_options.Xtargs;
-    else
-        assert(iscell(parsed_options.Xtargs), ...
-            'Xtargs must be a 2x1 cell array or scalar')
-        subunit.Xtargs = parsed_options.Xtargs;
-    end
+		if ~iscell(parsed_options.Xtargs) && isscalar(parsed_options.Xtargs)
+			% duplicate scalar values if supplied
+			subunit.Xtargs{1} = parsed_options.Xtargs;
+			subunit.Xtargs{2} = parsed_options.Xtargs;
+		else
+			assert(iscell(parsed_options.Xtargs), 'Xtargs must be a 2x1 cell array or scalar')
+			subunit.Xtargs = parsed_options.Xtargs;
+		end
     
-    % Establish scale of filters (and NL-resolution)
-    if 0
-        % will go to plus/minus 3-stds
-        subunit = subunit.normalize_filters(Xstims);
-        dx = 6.0/(Nticks{1}-1);
-        dy = 6.0/(Nticks{2}-1);
-        subunit.ticks{1} = -3:dx:3;
-        subunit.ticks{2} = -3:dy:3;
-    else
-        % will go between 1st and 99th percentile - more appropriate for 2p
-        % data
+		% Establish scale of filters (and NL-resolution)
+		if 0
+			% will go to plus/minus 3-stds
+			subunit = subunit.normalize_filters(Xstims);
+			dx = 6.0/(Nticks{1}-1);
+			dy = 6.0/(Nticks{2}-1);
+			subunit.ticks{1} = -3:dx:3;
+			subunit.ticks{2} = -3:dy:3;
+		else
+			% will go between 1st and 99th percentile - more appropriate for 2p data
 %         subunit = subunit.normalize_filters(Xstims);
-        gs = subunit.apply_filters(Xstims);
-        prctiles = prctile(gs(:,1), [1, 99]);
-        subunit.ticks{1} = linspace(prctiles(1), prctiles(2), Nticks{1});
-        prctiles = prctile(gs(:,2), [1, 99]);
-        subunit.ticks{2} = linspace(prctiles(1), prctiles(2), Nticks{2});
-    end
+			gs = subunit.apply_filters(Xstims);
+			prctiles = prctile( gs(:,1), [1,99] );
+			subunit.ticks{1} = linspace( prctiles(1), prctiles(2), Nticks{1} );
+			prctiles = prctile( gs(:,2), [1,99] );
+			subunit.ticks{2} = linspace( prctiles(1), prctiles(2), Nticks{2} );
+		end
     
-    subunit.reg_lambdas = TWODSUBUNIT.init_reg_lambdas(); % set all to zero
-    subunit.Ksign_con = {[], []};
-    subunit.pre_scale = eye(2);
+		subunit.reg_lambdas = TWODSUBUNIT.init_reg_lambdas(); % set all to zero
+		subunit.Ksign_con = {[], []};
+		subunit.pre_scale = eye(2);
     
-    end % method
+	end % method
     
 end
 %% *************************** output methods *****************************
 methods
     
-    function gs = apply_filters(subunit, Xstims)
-    % Usage: gs = subunit.apply_filters(Xstims)
+	function gs = apply_filters(subunit, Xstims)
+	% Usage: gs = subunit.apply_filters(Xstims)
 
-    NT = size(Xstims{1}, 1);
-    gs = zeros(NT,2);
-    gs(:,1) = Xstims{subunit.Xtargs{1}} * subunit.ks{1};
-    gs(:,2) = Xstims{subunit.Xtargs{2}} * subunit.ks{2};
+		if ~iscell(Xstims)
+			tmp = Xstims; clear Xstims
+			Xstims{1} = tmp;
+		end
+		
+		NT = size(Xstims{1}, 1);
+		gs = zeros(NT,2);
+		gs(:,1) = Xstims{subunit.Xtargs{1}} * subunit.ks{1};
+		gs(:,2) = Xstims{subunit.Xtargs{2}} * subunit.ks{2};
     
-    end % method
+	end % method
 
-    function sub_output = apply_NL(subunit, gen_signals)
-    % Usage: sub_output = subunit.apply_NL(gen_signals)
+	function sub_output = apply_NL(subunit, gen_signals)
+	% Usage: sub_output = subunit.apply_NL(gen_signals)
 
-    Xmat = subunit.make_NL2d_Xmat(gen_signals); % produce X-matrix
-    sub_output = Xmat*subunit.NL2d(:);
-    
-    end
+		Xmat = subunit.make_NL2d_Xmat(gen_signals); % produce X-matrix
+		sub_output = Xmat*subunit.NL2d(:);
+	end
 
-    function [dxdy_out, grad_x, grad_y] = apply_NL_deriv(subunit, gen_signals)
-    % Usage: [dx_out, dy_out, grad] = subunit.apply_NL_deriv(gen_signals)
-    % Calculates the piecewise-constant gradient of the 2D nonlinearity,
-    % and evaluates the gradient for each term in gen_signals
-    %
-    % INPUTS:
-    %   gen_signals: Tx2 matrix of filtered stimuli
-    %
-    % OUTPUTS:
-    %   dxdy_out: Tx2 vector containing [df/dx, df/dy] for each time point
-    %   grad_x:   Nbins_x x Nbins_y x 2 tensor containing gradient with
-    %             respect to x for lower (:,:,1) and upper triangles
-    %   grad_y:   Nbins_x x Nbins_y x 2 tensor containing gradient with
-    %             respect to y for lower (:,:,1) and upper triangles
+	function [dxdy_out, grads] = apply_NL_deriv(subunit, gen_signals)
+
+	function [dxdy_out, grad_x, grad_y] = apply_NL_deriv2D(subunit, gen_signals)
+	% Usage: [dx_out, dy_out, grad] = subunit.apply_NL_deriv(gen_signals)
+	% Calculates the piecewise-constant gradient of the 2D nonlinearity, and evaluates the gradient for each term in gen_signals
+	% This is Yuwei's function, and not properly overloading regular subunit function (see above)
+	%
+	% INPUTS:
+	%   gen_signals: Tx2 matrix of filtered stimuli
+	%
+	% OUTPUTS:
+	%   dxdy_out: Tx2 vector containing [df/dx, df/dy] for each time point
+	%   grad_x:   Nbins_x x Nbins_y x 2 tensor containing gradient with
+	%             respect to x for lower (:,:,1) and upper triangles
+	%   grad_y:   Nbins_x x Nbins_y x 2 tensor containing gradient with
+	%             respect to y for lower (:,:,1) and upper triangles
     
-    % calculate grad
-    NLx = subunit.ticks{1};
-    NLy = subunit.ticks{2};
-    Nx = length(NLx);
-    Ny = length(NLy);
-    grad_x = zeros(Nx-1,Ny-1,2);
-    grad_y = zeros(Nx-1,Ny-1,2);
+		% calculate grad
+		NLx = subunit.ticks{1};
+		NLy = subunit.ticks{2};
+		Nx = length(NLx);
+		Ny = length(NLy);
+		grad_x = zeros(Nx-1,Ny-1,2);
+		grad_y = zeros(Nx-1,Ny-1,2);
     
-    for x=1:Nx-1
-        for y=1:Ny-1
-            % vertices of lower triangle
-            LT = [NLx(x) NLy(y); NLx(x+1) NLy(y); NLx(x) NLy(y+1)];
-            LTf = [subunit.NL2d(x,y) subunit.NL2d(x+1,y) subunit.NL2d(x,y+1)];
-            % vertices of upper triangle
-            UT = [NLx(x+1) NLy(y); NLx(x+1) NLy(y+1); NLx(x) NLy(y+1)];
-            UTf = [subunit.NL2d(x+1,y) subunit.NL2d(x+1,y+1) subunit.NL2d(x,y+1)];
-            % calculate gradients
-            [grad_x(x,y,1), grad_y(x,y,1)] = TWODSUBUNIT.triangle_grad(LT, LTf);
-            [grad_x(x,y,2), grad_y(x,y,2)] = TWODSUBUNIT.triangle_grad(UT, UTf);
-        end
-    end
+		for x=1:Nx-1
+			for y=1:Ny-1
+				% vertices of lower triangle
+				LT = [NLx(x) NLy(y); NLx(x+1) NLy(y); NLx(x) NLy(y+1)];
+				LTf = [subunit.NL2d(x,y) subunit.NL2d(x+1,y) subunit.NL2d(x,y+1)];
+				% vertices of upper triangle
+				UT = [NLx(x+1) NLy(y); NLx(x+1) NLy(y+1); NLx(x) NLy(y+1)];
+				UTf = [subunit.NL2d(x+1,y) subunit.NL2d(x+1,y+1) subunit.NL2d(x,y+1)];
+				% calculate gradients
+				[grad_x(x,y,1), grad_y(x,y,1)] = TWODSUBUNIT.triangle_grad(LT, LTf);
+				[grad_x(x,y,2), grad_y(x,y,2)] = TWODSUBUNIT.triangle_grad(UT, UTf);
+			end
+		end
     
-    % calculate value of grad for each time point
+		% calculate value of grad for each time point
     [NT, Ndim] = size(gen_signals);
     assert(Ndim == 2, 'gen_signals must be a 2D signal')
 
@@ -490,7 +492,7 @@ methods (Static)
     
     function [dx, dy] = triangle_grad(xy, z)
     % Usage: [dX, dY] = TWODSUBUNIT.triangle_grad(T, f)
-    % Calculates the derivate along the x and y directions of wrt z of an 
+    % Calculates the derivate along the x and y directions wrt z of an 
     % arbitrarily-oriented triangle in 3D space. The formulas here can be
     % derived by considering the 3 (x,y,z) coordinates as defining a plane,
     % and calculating the equation of that plane as z = a*x + b*y + c; then
