@@ -3,10 +3,10 @@ classdef TWODSUBUNIT
 properties
     NL2d;           % 2D nonlinearity coefficients
     ks;             % 2x1 cell array of filter coefficients (x-dir/y-dir)
-    Xtargs;         % 2x1 cell array of indices of stimulus the filters act on
+    Xtargs;         % 2x1 array of indices of stimulus the filters act on
     ticks;          % 2x1 cell array of tick values along x/y-dir
     reg_lambdas;    % struct of regularization hyperparameters
-    Ksign_con;      % 2x1 cell array defining constraint matrices A and B
+    Ksign_con;      % 2x1 cell array defining constraint matrices A and B <- overly complicated to define here. Why....
                     % such that A*TWODSUBUNIT.NL2d(:) < B
     pre_scale;      % 2x2 scale matrix
 end
@@ -23,13 +23,12 @@ methods
 	%   Xstims: cell array of stimulus matrices
 	%
 	%   optional arguments:
-	%     'Xtargs': 2x1 cell array of X-target indices for subunit. Default
-	%               will be 1
+	%     'Xtargs': 2x1 array of X-target indices for subunit. Default will be 1 for both
 	%     'Nticks': 2x1 cell array or scalar defining number of ticks/coeffs to represent each dimension.
 	%     'ticks':  2x1 cell array of tick values for each dimension
 
 		% Parse input options
-		defaults.Xtargs = {1,1};
+		defaults.Xtargs = [1 1];
 		defaults.Nticks = {21,21}; % 20 bins
 		[~, parsed_options] = NIM.parse_varargin(varargin, [], defaults);
     
@@ -53,12 +52,11 @@ methods
 			subunit.ks{2}(1:2) = 0;
 		end
     
-		if ~iscell(parsed_options.Xtargs) && isscalar(parsed_options.Xtargs)
+		if length(parsed_options.Xtargs) == 1
 			% duplicate scalar values if supplied
-			subunit.Xtargs{1} = parsed_options.Xtargs;
-			subunit.Xtargs{2} = parsed_options.Xtargs;
+			subunit.Xtargs = parsed_options.Xtargs*[1 1];
 		else
-			assert(iscell(parsed_options.Xtargs), 'Xtargs must be a 2x1 cell array or scalar')
+			assert(length(parsed_options.Xtargs) == 2, 'Xtargs must be a 2x1 array or scalar')
 			subunit.Xtargs = parsed_options.Xtargs;
 		end
     
@@ -81,7 +79,8 @@ methods
 		end
     
 		subunit.reg_lambdas = TWODSUBUNIT.init_reg_lambdas(); % set all to zero
-		subunit.Ksign_con = {[], []};
+		%subunit.Ksign_con = {[], []};
+		subunit.Ksign_con = [0 0];
 		subunit.pre_scale = eye(2);
     
 	end % method
@@ -100,8 +99,8 @@ methods
 		
 		NT = size(Xstims{1}, 1);
 		gs = zeros(NT,2);
-		gs(:,1) = Xstims{subunit.Xtargs{1}} * subunit.ks{1};
-		gs(:,2) = Xstims{subunit.Xtargs{2}} * subunit.ks{2};
+		gs(:,1) = Xstims{subunit.Xtargs(1)} * subunit.ks{1};
+		gs(:,2) = Xstims{subunit.Xtargs(2)} * subunit.ks{2};
     
 	end % method
 
@@ -112,10 +111,13 @@ methods
 		sub_output = Xmat*subunit.NL2d(:);
 	end
 
-	function [dxdy_out, grads] = apply_NL_deriv(subunit, gen_signals)
-
-	function [dxdy_out, grad_x, grad_y] = apply_NL_deriv2D(subunit, gen_signals)
-	% Usage: [dx_out, dy_out, grad] = subunit.apply_NL_deriv(gen_signals)
+	function [dxdy_out, grads] = apply_NL_deriv( twoD_subunit, gen_signals )   % overload
+		[dxdy_out, grad_x, grad_y] = apply_NL_deriv2D( twoD_subunit, gen_signals );
+		grads = [grad_x; grad_y;];
+	end
+	
+	function [dxdy_out, grad_x, grad_y] = apply_NL_deriv2D( subunit, gen_signals )
+	% Usage: [dx_out, dy_out, grad] = subunit.apply_NL_deriv( gen_signals )
 	% Calculates the piecewise-constant gradient of the 2D nonlinearity, and evaluates the gradient for each term in gen_signals
 	% This is Yuwei's function, and not properly overloading regular subunit function (see above)
 	%
@@ -151,65 +153,66 @@ methods
 			end
 		end
     
-		% calculate value of grad for each time point
-    [NT, Ndim] = size(gen_signals);
-    assert(Ndim == 2, 'gen_signals must be a 2D signal')
+		% Calculate value of grad for each time point
+		[NT, Ndim] = size(gen_signals);
+		assert(Ndim == 2, 'gen_signals must be a 2D signal')
 
-    % gen_signals = gen_signals*subunit.prescale;
-    gen_signals = subunit.truncate_sig(gen_signals);
+		% gen_signals = gen_signals*subunit.prescale;
+		gen_signals = subunit.truncate_sig(gen_signals);
 
-    % bin centers
-    [~, binx] = histc(gen_signals(:,1), NLx);
-    [~, biny] = histc(gen_signals(:,2), NLy);
+		% bin centers
+		[~, binx] = histc(gen_signals(:,1), NLx);
+		[~, biny] = histc(gen_signals(:,2), NLy);
 
-    dxdy_out = zeros(NT,2);
+		dxdy_out = zeros(NT,2);
 
-    % go through all bins
-    for x=1:Nx-1
-        for y=1:Ny-1                    
+		% go through all bins
+		for x = 1:Nx-1
+			for y = 1:Ny-1                    
 
-            % data points in the current bin
-            inds = find(binx(:) == x & biny(:) == y);
-            if isempty(inds)
-                continue;
-            end
+				% data points in the current bin
+				inds = find(binx(:) == x & biny(:) == y);
+				if isempty(inds)
+					continue;
+				end
 
-            % vertices of lower triangle
-            LT = [NLx(x) NLy(y); NLx(x+1) NLy(y); NLx(x) NLy(y+1)];
-            % vertices of upper triangle
-            % UT = [NLx(x+1) NLy(y); NLx(x+1) NLy(y+1); NLx(x) NLy(y+1)];
+				% vertices of lower triangle
+				LT = [NLx(x) NLy(y); NLx(x+1) NLy(y); NLx(x) NLy(y+1)];
+				% vertices of upper triangle
+				% UT = [NLx(x+1) NLy(y); NLx(x+1) NLy(y+1); NLx(x) NLy(y+1)];
 
-            % separate points in this bin into two different triangles
-            flag = TWODSUBUNIT.point_in_triangle(gen_signals(inds,:), ...
-                                                 LT(1,:), LT(2,:), LT(3,:));
-            indLT = inds(flag==1);
-            indUT = inds(flag==0);
+				% separate points in this bin into two different triangles
+				flag = TWODSUBUNIT.point_in_triangle(gen_signals(inds,:), ...
+								LT(1,:), LT(2,:), LT(3,:));
+				indLT = inds(flag==1);
+				indUT = inds(flag==0);
 
-            % assign derivatives to points in lower triangle
-            if ~isempty(indLT)
-                dxdy_out(indLT,1) = grad_x(x,y,1);
-                dxdy_out(indLT,2) = grad_y(x,y,1);
-            end
-            % assign derivatives to points in upper triangle
-            if ~isempty(indUT)
-                dxdy_out(indUT,1) = grad_x(x,y,2);
-                dxdy_out(indUT,2) = grad_y(x,y,2);
-            end
-        end
-    end
+				% assign derivatives to points in lower triangle
+				if ~isempty(indLT)
+					dxdy_out(indLT,1) = grad_x(x,y,1);
+					dxdy_out(indLT,2) = grad_y(x,y,1);
+				end
+				% assign derivatives to points in upper triangle
+				if ~isempty(indUT)
+					dxdy_out(indUT,1) = grad_x(x,y,2);
+					dxdy_out(indUT,2) = grad_y(x,y,2);
+				end
+			end
+		end
+		% dxdy_out = dxdy_out*(TB.prescale');
+
+	end
     
-    % dxdy_out = dxdy_out*(TB.prescale');
+	function sub_output = process_stim(subunit, Xstims)
+	% Usage: sub_output = subunit.process_stim( Xstims )
+	% Generate output of twoD-subunit
 
-    end
+		sub_output = subunit.apply_NL(subunit.apply_filters(Xstims));
     
-    function sub_output = process_stim(subunit, Xstims)
-    % Usage: sub_output = subunit.process_stim(Xstims)
-
-    sub_output = subunit.apply_NL(subunit.apply_filters(Xstims));
-    
-    end % method
+	end % method
 
 end
+
 %% *************************** display methods ****************************
 methods
     
@@ -410,8 +413,8 @@ end
 %% *************************** static methods *****************************
 methods (Static)
     
-    function reg_lambdas = init_reg_lambdas()
-    % Usage: reg_lambdas = init_reg_lambdas()
+	function reg_lambdas = init_reg_lambdas()
+	% Usage: reg_lambdas = init_reg_lambdas()
 	% Creates reg_lambdas struct and sets default values to 0; this method
 	% comes from the SUBUNIT class and should be kept up to date with it,
 	% else fit_NL2d won't work.
@@ -422,103 +425,100 @@ methods (Static)
 		reg_lambdas.d2t = 0; %2nd temporal deriv
 		reg_lambdas.l2 = 0; %L2 on filter coefs
 		reg_lambdas.l1 = 0; %L1 on filter coefs
-    end
+	end
     
-    function lambda = barycentric(P, A, B, C)
-    % Usage: lambda = TWODSUBUNIT.barycentric(P, A, B, C)
-    %
-    % Calculate barycenteric coordinate of point P with respect to triangle
-    % ABC
-    % Yuwei Cui, Oct 30, 2012
+	function lambda = barycentric(P, A, B, C)
+	% Usage: lambda = TWODSUBUNIT.barycentric(P, A, B, C)
+	%
+	% Calculate barycenteric coordinate of point P with respect to triangle ABC
+	% Yuwei Cui, Oct 30, 2012
 
-    Npt = size(P,1);
-    lambda = zeros(Npt,3);
+		Npt = size(P,1);
+		lambda = zeros(Npt,3);
 
-    x = [A(1) B(1) C(1)];
-    y = [A(2) B(2) C(2)];
+		x = [A(1) B(1) C(1)];
+		y = [A(2) B(2) C(2)];
 
-    M = ((y(2)-y(3))*(x(1)-x(3))+(x(3)-x(2))*(y(1)-y(3)));
-    lambda(:,1) = ((y(2)-y(3))*(P(:,1)-x(3))+(x(3)-x(2))*(P(:,2)-y(3)))/M;
-    lambda(:,2) = ((y(3)-y(1))*(P(:,1)-x(3))+(x(1)-x(3))*(P(:,2)-y(3)))/M;
+		M = ((y(2)-y(3))*(x(1)-x(3))+(x(3)-x(2))*(y(1)-y(3)));
+		lambda(:,1) = ((y(2)-y(3))*(P(:,1)-x(3))+(x(3)-x(2))*(P(:,2)-y(3)))/M;
+		lambda(:,2) = ((y(3)-y(1))*(P(:,1)-x(3))+(x(1)-x(3))*(P(:,2)-y(3)))/M;
 
-    % lambda(:,1) = ((B(2)-C(2))*(P(:,1)-C(1))+(C(1)-B(1))*(P(:,2)-C(2)))./...
-    %     ((B(2)-C(2))*(A(1)-C(1))+(C(1)-B(1))*(A(2)-C(2)));
-    % lambda(:,2) = ((C(2)-A(2))*(P(:,1)-C(1))+(A(1)-C(1))*(P(:,2)-C(2)))./...
-    %     ((B(2)-C(2))*(A(1)-C(1))+(C(1)-B(1))*(A(2)-C(2)));
+		% lambda(:,1) = ((B(2)-C(2))*(P(:,1)-C(1))+(C(1)-B(1))*(P(:,2)-C(2)))./...
+		%     ((B(2)-C(2))*(A(1)-C(1))+(C(1)-B(1))*(A(2)-C(2)));
+		% lambda(:,2) = ((C(2)-A(2))*(P(:,1)-C(1))+(A(1)-C(1))*(P(:,2)-C(2)))./...
+		%     ((B(2)-C(2))*(A(1)-C(1))+(C(1)-B(1))*(A(2)-C(2)));
 
-    lambda(:,3) = ones(Npt,1)-lambda(:,1)-lambda(:,2);
+		lambda(:,3) = ones(Npt,1)-lambda(:,1)-lambda(:,2);
     
-    end % method
+	end % method
     
-    function flag = point_in_triangle(P, A, B, C) 
-    % Usage: flag = TWODSUBUNIT.point_in_triangle(P, A, B, C) 
-    %
-    % This function will decide whether point P is inside the triangle 
-    % defined by the points A, B, C or not (edge included). The Input P can
-    % also be a Nx2 vector, each row is a point
-    %
-    % This method is sometimes referred as the "Barycentric Technique"
-    % For more info, see the following link:
-    % http://en.wikipedia.org/wiki/Barycentric_coordinates_%28mathematics%29
-    % or the one I used:
-    % http://www.blackpawn.com/texts/pointinpoly/default.html
-    % Implemented by Yuwei Cui, Oct 30. 2012
+	function flag = point_in_triangle(P, A, B, C) 
+	% Usage: flag = TWODSUBUNIT.point_in_triangle(P, A, B, C) 
+	%
+	% This function will decide whether point P is inside the triangle 
+	% defined by the points A, B, C or not (edge included). The Input P can
+	% also be a Nx2 vector, each row is a point
+	%
+	% This method is sometimes referred as the "Barycentric Technique"
+	% For more info, see the following link:
+	% http://en.wikipedia.org/wiki/Barycentric_coordinates_%28mathematics%29
+	% or the one I used:
+	% http://www.blackpawn.com/texts/pointinpoly/default.html
+	% Implemented by Yuwei Cui, Oct 30. 2012
 
-    A = A(:)';
-    B = B(:)';
-    C = C(:)';
-    Npt = size(P,1);
+		A = A(:)';
+		B = B(:)';
+		C = C(:)';
+		Npt = size(P,1);
 
-    % Compute vectors        
-    v0 = C - A;
-    v1 = B - A;
-    v2 = P - ones(Npt,1)*A;
+		% Compute vectors        
+		v0 = C - A;
+		v1 = B - A;
+		v2 = P - ones(Npt,1)*A;
 
-    % Compute dot products
-    dot00 = v0*v0';
-    dot01 = v0*v1';
-    dot11 = v1*v1';
-    dot02 = v2*v0';
-    dot12 = v2*v1';
+		% Compute dot products
+		dot00 = v0*v0';
+		dot01 = v0*v1';
+		dot11 = v1*v1';
+		dot02 = v2*v0';
+		dot12 = v2*v1';
 
-    % Compute barycentric coordinates
-    invDenom = 1 / (dot00 * dot11 - dot01 * dot01);
-    u = (dot11 * dot02 - dot01 * dot12) * invDenom;
-    v = (dot00 * dot12 - dot01 * dot02) * invDenom;
+		% Compute barycentric coordinates
+		invDenom = 1 / (dot00 * dot11 - dot01 * dot01);
+		u = (dot11 * dot02 - dot01 * dot12) * invDenom;
+		v = (dot00 * dot12 - dot01 * dot02) * invDenom;
 
-    % Check if point is in triangle
-    flag = (u >= 0) & (v >= 0) & (u + v <= 1);
-    end
+		% Check if point is in triangle
+		flag = (u >= 0) & (v >= 0) & (u + v <= 1);
+	end
     
-    function [dx, dy] = triangle_grad(xy, z)
-    % Usage: [dX, dY] = TWODSUBUNIT.triangle_grad(T, f)
-    % Calculates the derivate along the x and y directions wrt z of an 
-    % arbitrarily-oriented triangle in 3D space. The formulas here can be
-    % derived by considering the 3 (x,y,z) coordinates as defining a plane,
-    % and calculating the equation of that plane as z = a*x + b*y + c; then
-    % dz/dx = a and dz/dy = b (or dx = a and dy = b, as per the notation of
-    % this function).
-    %
-    % INPUTS:
-    %   xy: 3x2 matrix of x-y coordinates of triangle vertices
-    %   z:  3x1 vector of z-coordinates of triangle vertices
-    %
-    % OUTPUS:
-    %   dx: derivative in x-direction
-    %   dy: derivative in y-direction
+	function [dx, dy] = triangle_grad(xy, z)
+	% Usage: [dX, dY] = TWODSUBUNIT.triangle_grad(T, f)
+	% Calculates the derivate along the x and y directions wrt z of an 
+	% arbitrarily-oriented triangle in 3D space. The formulas here can be
+	% derived by considering the 3 (x,y,z) coordinates as defining a plane,
+	% and calculating the equation of that plane as z = a*x + b*y + c; then
+	% dz/dx = a and dz/dy = b (or dx = a and dy = b, as per the notation of
+	% this function).
+	%
+	% INPUTS:
+	%   xy: 3x2 matrix of x-y coordinates of triangle vertices
+	%   z:  3x1 vector of z-coordinates of triangle vertices
+	%
+	% OUTPUTS:
+	%   dx: derivative in x-direction
+	%   dy: derivative in y-direction
     
-    x = xy(:,1);
-    y = xy(:,2);
+		x = xy(:,1);
+		y = xy(:,2);
 
-    M = ((y(2)-y(3))*(x(1)-x(3))+(x(3)-x(2))*(y(1)-y(3)));
+		M = ((y(2)-y(3))*(x(1)-x(3))+(x(3)-x(2))*(y(1)-y(3)));
 
-    dx = (z(1)*(y(2)-y(3)) + z(2)*(y(3)-y(1)) + ...
-        z(3)*(-(y(2)-y(3))-(y(3)-y(1))) )/M;
+		dx = (z(1)*(y(2)-y(3)) + z(2)*(y(3)-y(1)) + z(3)*(-(y(2)-y(3))-(y(3)-y(1))) ) / M;
 
-    dy = (z(1)*(x(3)-x(2)) + z(2)*(x(1)-x(3))+...
-        z(3)*(-(x(3)-x(2))-(x(1)-x(3))) )/M;
+		dy = (z(1)*(x(3)-x(2)) + z(2)*(x(1)-x(3))+ z(3)*(-(x(3)-x(2))-(x(1)-x(3))) ) / M;
     
-    end
+	end
     
 end
 
