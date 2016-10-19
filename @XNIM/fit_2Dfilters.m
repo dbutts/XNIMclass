@@ -208,6 +208,7 @@ for ii = 1:Nfit_subs
 		xnim_out.twoD_subunits(fit_subs(ii)).ks{jj} = cur_kern(:); % assign new filter values
 		kOffset = kOffset + NKs(2*(ii-1)+jj);
 	end
+	xnim_out.twoD_subunits(fit_subs(ii)) = xnim_out.twoD_subunits(fit_subs(ii)).normalize_filters( Xstims ); 
 end
 
 [LL,~,mod_internals,LL_data] = xnim_out.eval_model(Robs,Xstims,'gain_funs',gain_funs);

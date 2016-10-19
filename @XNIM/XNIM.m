@@ -405,17 +405,35 @@ methods
     
 	function [LL, pred_rate, mod_internals, LL_data] = eval_model( xnim, Robs, Xstims, varargin )
 	% Usage: [LL, pred_rate, mod_internals, LL_data] = xnim.eval_model( Robs, Xstims, <eval_inds>, varargin ) 
+	%
+	% Overloaded for XNIM: evaluates model as NIM, but for mod_internals it will have the twoDsubunit outputs
+	% as the last entries in fgint, leave the corresponding gint to be the same, and separately have gint2d
 	
 		[nim_tmp, Xs_mod] = xnim.convert2NIM( Xstims );
     
 		[LL, pred_rate, mod_internals, LL_data] = nim_tmp.eval_model( Robs, Xs_mod, varargin{:} );
 
 		if ~isempty(xnim.twoD_subunits)
-			mod_internals.fgint2d = mod_internals.fgint(:,end);
-			mod_internals.gint = mod_internals.gint(:,1:end-1);
-			mod_internals.fgint = mod_internals.fgint(:,1:end-1);
+			N2d = length(xnim.twoD_subunits);
+			% mod_internals.fgint2d = mod_internals.fgint(:,end);
+			% mod_internals.gint = mod_internals.gint(:,1:end-1);
+			%mod_internals.fgint = mod_internals.fgint(:,1:end-1);
+			[XVindx,~] = NIM.parse_varargin( varargin );
+			if isempty(XVindx)
+				XVindx = 1:size(mod_internals.gint,1);
+			end
+			mod_internals.gint2d = zeros(length(XVindx),N2d*2);
+			if ~iscell(Xstims)
+				tmp = Xstims; clear Xstims
+				Xstims{1} = tmp;
+			end
+			for nn = 1:N2d
+				for mm = 1:2
+					mod_internals.gint2d(:,(nn-1)*2+mm) = Xstims{xnim.twoD_subunits(nn).Xtargs(mm)}(XVindx,:) * xnim.twoD_subunits(nn).ks{mm};
+				end
+			end
 		else
-			mod_internals.fgint2d = [];
+			mod_internals.gint2d = [];
 		end
 			
 	end % method
@@ -441,58 +459,56 @@ methods
 		Nmods = length(xnim.twoD_subunits);
 		mod_outs = [];
 
-    if isfield(parsed_options, 'Xstims')
-        if iscell(parsed_options.Xstims)
-            Xstims = parsed_options.Xstims;
-        else
-            Xstims{1} = parsed_options.Xstims;
-        end			
-        Robs = [];
-        if isfield(parsed_options, 'Robs') 
-            Robs = parsed_options.Robs;
-        end
-        [~,~,mod_outs] = xnim.eval_model(Robs, Xstims);
-    elseif isfield(parsed_options, 'mod_outs')
-        mod_outs = parsed_options.mod_outs;
-    end
+		if isfield(parsed_options, 'Xstims')
+			if iscell(parsed_options.Xstims)
+				Xstims = parsed_options.Xstims;
+			else
+				Xstims{1} = parsed_options.Xstims;
+			end			
+			Robs = [];
+			if isfield(parsed_options, 'Robs') 
+				Robs = parsed_options.Robs;
+			end
+			[~,~,mod_outs] = xnim.eval_model(Robs, Xstims);
+		elseif isfield(parsed_options, 'mod_outs')
+			mod_outs = parsed_options.mod_outs;
+		end
 
-    % will be spike-history or spkNL plot?
-    extra_plots = [(xnim.spk_hist.spkhstlen > 0) ~isempty(mod_outs)]; 
+    % Will be spike-history or spkNL plot?
+		extra_plots = [(xnim.spk_hist.spkhstlen > 0) ~isempty(mod_outs)]; 
 
-    if sum(extra_plots) == 0
-        Nrows = Nmods;
-        Ncols = 3;
-    else
-        % Then need extra column (and possibly extra row)
-        Nrows = max([Nmods sum(extra_plots)]);
-        Ncols = 4;
-    end
+		if sum(extra_plots) == 0
+			Nrows = Nmods;
+			Ncols = 3;
+		else
+			% then need extra column (and possibly extra row)
+			Nrows = max([Nmods sum(extra_plots)]);
+			Ncols = 4;
+		end
 
-    if nargout > 0
-        fig_handle = figure;
-    else
-        figure;
-    end
-    % Plot Subunit info
-    for nn = 1:Nmods
-        dims{1} = xnim.stim_params(xnim.twoD_subunits(nn).Xtargs(1)).dims;
-        dims{2} = xnim.stim_params(xnim.twoD_subunits(nn).Xtargs(2)).dims;
-        xnim.twoD_subunits(nn).display_filter(...
-            dims, ...
-            [Nrows Ncols (nn-1)*Ncols+1], ...
-            modvarargin{:});
-        subplot(Nrows, Ncols, (nn-1)*Ncols+3);
-        if isempty(mod_outs)
-            xnim.twoD_subunits(nn).display_NL();
-        else
-            xnim.twoD_subunits(nn).display_NL(mod_outs.gint(:,nn));
-        end
-    end
+		if nargout > 0
+			fig_handle = figure;
+		else
+			figure;
+		end
+		
+		% Plot subunit info
+		for nn = 1:Nmods
+			dims{1} = xnim.stim_params(xnim.twoD_subunits(nn).Xtargs(1)).dims;
+			dims{2} = xnim.stim_params(xnim.twoD_subunits(nn).Xtargs(2)).dims;
+			xnim.twoD_subunits(nn).display_filter( dims, [Nrows Ncols (nn-1)*Ncols+1], modvarargin{:} );
+			subplot(Nrows, Ncols, (nn-1)*Ncols+3);
+			if isempty(mod_outs)
+				xnim.twoD_subunits(nn).display_NL();
+			else
+				xnim.twoD_subunits(nn).display_NL(mod_outs.gint(:,nn));
+			end
+		end
 
-    % Plot spkNL
-    if sum(extra_plots) == 0
-        return
-    end
+		% Plot spkNL
+		if sum(extra_plots) == 0
+			return
+		end
 
     subplot(Nrows, Ncols, Ncols);
     if extra_plots(2) > 0

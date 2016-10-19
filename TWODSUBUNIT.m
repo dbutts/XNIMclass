@@ -60,23 +60,9 @@ methods
 			subunit.Xtargs = parsed_options.Xtargs;
 		end
     
-		% Establish scale of filters (and NL-resolution)
-		if 0
-			% will go to plus/minus 3-stds
-			subunit = subunit.normalize_filters(Xstims);
-			dx = 6.0/(Nticks{1}-1);
-			dy = 6.0/(Nticks{2}-1);
-			subunit.ticks{1} = -3:dx:3;
-			subunit.ticks{2} = -3:dy:3;
-		else
-			% will go between 1st and 99th percentile - more appropriate for 2p data
-%         subunit = subunit.normalize_filters(Xstims);
-			gs = subunit.apply_filters(Xstims);
-			prctiles = prctile( gs(:,1), [1,99] );
-			subunit.ticks{1} = linspace( prctiles(1), prctiles(2), Nticks{1} );
-			prctiles = prctile( gs(:,2), [1,99] );
-			subunit.ticks{2} = linspace( prctiles(1), prctiles(2), Nticks{2} );
-		end
+		% Establish scale of filters and NL-resolution
+		subunit = subunit.normalize_filters( Xstims );
+		subunit = subunit.scale_NLaxes( Xstims );
     
 		subunit.reg_lambdas = TWODSUBUNIT.init_reg_lambdas(); % set all to zero
 		%subunit.Ksign_con = {[], []};
@@ -262,154 +248,168 @@ end
 %% *************************** hidden methods *****************************
 methods (Hidden)
 
-    function subunit = init_NL2d(subunit, interaction)
-    % Usage: subunit = subunit.init_NL2d(interaction)
-    % Initializes values for NL2d
-    %
-    % INPUTS:
-    %   interaction:    'add' | 'mult'
-    %
-    % OUTPUTS:
-    %   subunit:    updated subunit object
+	function subunit = init_NL2d(subunit, interaction)
+	% Usage: subunit = subunit.init_NL2d(interaction)
+	% Initializes values for NL2d
+	%
+	% INPUTS:
+	%   interaction:    'add' | 'mult'
+	%
+	% OUTPUTS:
+	%   subunit:    updated subunit object
     
-    if strcmp(interaction, 'add')
-        subunit.NL2d = bsxfun(@plus, subunit.ticks{1}(:), subunit.ticks{2}(:)');
-    elseif strcmp(interaction, 'mult')
-        subunit.NL2d = subunit.ticks{1}(:) * subunit.ticks{2}(:)';
-    else
-        error('Invalid interaction string specified')
-    end
+		if strcmp(interaction, 'add')
+			subunit.NL2d = bsxfun(@plus, subunit.ticks{1}(:), subunit.ticks{2}(:)');
+		elseif strcmp(interaction, 'mult')
+			subunit.NL2d = subunit.ticks{1}(:) * subunit.ticks{2}(:)';
+		else
+			error('Invalid interaction string specified')
+		end
     
-    end % method
+	end % method
     
-    function [subunit, mean_gs] = normalize_filters(subunit, stims)
-    % Usage: [subunit, mean_gs] = subunit.normalize_filters(stims);
+	function [subunit, mean_gs] = normalize_filters(subunit, stims)
+	% Usage: [subunit, mean_gs] = subunit.normalize_filters(stims);
 
-    gs = subunit.apply_filters(stims);
-    mean_gs = mean(gs);
-    for nn = 1:2
-        nrm = std(gs(:,nn));
-        if nrm > 0
-            subunit.ks{nn} = subunit.ks{nn}/nrm;
-        end
-    end
+		gs = subunit.apply_filters( stims );
+		mean_gs = mean(gs);
+		for nn = 1:2
+			nrm = std(gs(:,nn));
+			if nrm > 0
+				subunit.ks{nn} = subunit.ks{nn}/nrm;
+			end
+		end
     
-    end % method
+	end % method
 
-    function [NLoutput, Counts, binx, biny] = make_NL2d_Xmat(subunit, gen_signals)
-    % calculates output of 2D nonlinearity with respect to subunit.NL2d
-    % coefficients.
-    %
-    % Input:
-    %       gen_signals:    NTx2 matrix of generating signals
-    %
-    % Output:
-    %       NLoutput:       NTxNpar matrix, where Npar = Nbins_x*Nbins_y
-    %       Counts:         ticks{1} x ticks{2} matrix, number of samples
-    %                       per vertex
-    %
-    % Yuwei Cui, Created by Oct 20, 2012
-    % Oct 28, 2012 Extend Pixel filter to 2D tent filter
+	function twoDsub_out = scale_NLaxes( twoDsub, Xstims )
+	% Usage: twoDsub_out = twoDsub.scale_NLaxes( Xstims )
+	
+		% will go to plus/minus 3-stds
+		%subunit = subunit.normalize_filters( Xstims );
+		%dx = 6.0/(Nticks{1}-1);
+		%dy = 6.0/(Nticks{2}-1);
+		%subunit.ticks{1} = -3:dx:3;
+		%subunit.ticks{2} = -3:dy:3;
 
-    [NT, Ndim] = size(gen_signals);
-    assert(Ndim == 2, 'gen_signals must be a 2D signal')
+		% will go between 1st and 99th percentile - more appropriate for 2p data
+		twoDsub_out = twoDsub.normalize_filters( Xstims );
+		gs = twoDsub_out.apply_filters( Xstims );
+		prctiles = prctile( gs(:,1), [1,99] );
+		twoDsub_out.ticks{1} = linspace( prctiles(1), prctiles(2), size(twoDsub.NL2d,1) );
+		prctiles = prctile( gs(:,2), [1,99] );
+		twoDsub_out.ticks{2} = linspace( prctiles(1), prctiles(2), size(twoDsub.NL2d,2) );
+		
+	end % method
+	
+	function [NLoutput, Counts, binx, biny] = make_NL2d_Xmat(subunit, gen_signals)
+	% calculates output of 2D nonlinearity with respect to subunit.NL2d coefficients.
+	%
+	% Input:
+	%       gen_signals:    NTx2 matrix of generating signals
+	%
+	% Output:
+	%       NLoutput:       NTxNpar matrix, where Npar = Nbins_x*Nbins_y
+	%       Counts:         ticks{1} x ticks{2} matrix, number of samples
+	%                       per vertex
+	%
+	% Yuwei Cui, Created by Oct 20, 2012
+	% Oct 28, 2012 Extend Pixel filter to 2D tent filter
 
-    % gen_signals = gen_signals*subnit.prescale;
-    gen_signals = subunit.truncate_sig(gen_signals);
+		[NT, Ndim] = size(gen_signals);
+		assert(Ndim == 2, 'gen_signals must be a 2D signal')
+
+		% gen_signals = gen_signals*subnit.prescale;
+		gen_signals = subunit.truncate_sig(gen_signals);
     
-    NLx = subunit.ticks{1};
-    NLy = subunit.ticks{2};
+		NLx = subunit.ticks{1};
+		NLy = subunit.ticks{2};
     
-    % number of sample pts along x/y dimensions
-    NNx = length(NLx);
-    NNy = length(NLy);
+		% number of sample pts along x/y dimensions
+		NNx = length(NLx);
+		NNy = length(NLy);
 
-    % bin centers
-    [~, binx] = histc(gen_signals(:,1), NLx);
-    [~, biny] = histc(gen_signals(:,2), NLy);
+		% bin centers
+		[~, binx] = histc(gen_signals(:,1), NLx);
+		[~, biny] = histc(gen_signals(:,2), NLy);
 
-    NLoutput = zeros(NT, NNx, NNy);
-    if nargout > 1
-        Counts = zeros(NNx,NNy);
-    end
+		NLoutput = zeros(NT, NNx, NNy);
+		if nargout > 1
+			Counts = zeros(NNx,NNy);
+		end
 
-    % go through all bins
-    for x=1:NNx-1
-        for y=1:NNy-1           
+		% Go through all bins
+		for x=1:NNx-1
+			for y=1:NNy-1           
             
-            % data points in the current bin
-            inds = find(binx(:) == x & biny(:) == y);
-            if isempty(inds)
-                continue;
-            end
+				% data points in the current bin
+				inds = find(binx(:) == x & biny(:) == y);
+				if isempty(inds)
+					continue;
+				end
 
-            % vertices of lower triangle
-            LT = [NLx(x) NLy(y); NLx(x+1) NLy(y); NLx(x) NLy(y+1)];
-            % vertices of upper triangle
-            UT = [NLx(x+1) NLy(y); NLx(x+1) NLy(y+1); NLx(x) NLy(y+1)];
+				% vertices of lower triangle
+				LT = [NLx(x) NLy(y); NLx(x+1) NLy(y); NLx(x) NLy(y+1)];
+				% vertices of upper triangle
+				UT = [NLx(x+1) NLy(y); NLx(x+1) NLy(y+1); NLx(x) NLy(y+1)];
             
-            % separate points in this bin into two different triangles
-            flag = TWODSUBUNIT.point_in_triangle(gen_signals(inds,:), ...
-                                                 LT(1,:), LT(2,:), LT(3,:));
-            indLT = inds(flag == 1);
-            indUT = inds(flag == 0);
+				% separate points in this bin into two different triangles
+				flag = TWODSUBUNIT.point_in_triangle(gen_signals(inds,:), LT(1,:), LT(2,:), LT(3,:));
+				indLT = inds(flag == 1);
+				indUT = inds(flag == 0);
 
-            % calculate barycentric coordinates in lower triangle
-            lambdasLT = TWODSUBUNIT.barycentric(gen_signals(indLT,:), ...
-                                                LT(1,:), LT(2,:), LT(3,:));
-            % convert to coefficient loadings
-            NLoutput(indLT,x,y)   = lambdasLT(:,1);
-            NLoutput(indLT,x+1,y) = lambdasLT(:,2);
-            NLoutput(indLT,x,y+1) = lambdasLT(:,3);
+				% calculate barycentric coordinates in lower triangle
+				lambdasLT = TWODSUBUNIT.barycentric(gen_signals(indLT,:), LT(1,:), LT(2,:), LT(3,:));
+				% convert to coefficient loadings
+				NLoutput(indLT,x,y)   = lambdasLT(:,1);
+				NLoutput(indLT,x+1,y) = lambdasLT(:,2);
+				NLoutput(indLT,x,y+1) = lambdasLT(:,3);
 
-            % calculate barycentric coordinates in lower triangle
-            lambdasUT = TWODSUBUNIT.barycentric(gen_signals(indUT,:), ...
-                                                UT(1,:), UT(2,:), UT(3,:));
-            % convert to coefficient loadings
-            NLoutput(indUT,x+1,y)   = lambdasUT(:,1);
-            NLoutput(indUT,x+1,y+1) = lambdasUT(:,2);
-            NLoutput(indUT,x,y+1)   = lambdasUT(:,3);
+				% calculate barycentric coordinates in lower triangle
+				lambdasUT = TWODSUBUNIT.barycentric(gen_signals(indUT,:), UT(1,:), UT(2,:), UT(3,:));
+				% convert to coefficient loadings
+				NLoutput(indUT,x+1,y)   = lambdasUT(:,1);
+				NLoutput(indUT,x+1,y+1) = lambdasUT(:,2);
+				NLoutput(indUT,x,y+1)   = lambdasUT(:,3);
 
-            if nargout>1
-                % count sample per vertex
-                NLT = length(indLT);
-                Counts(x,y)   = Counts(x,y) + NLT;
-                Counts(x+1,y) = Counts(x+1,y) + NLT;
-                Counts(x,y+1) = Counts(x,y+1) + NLT;
+				if nargout>1
+					% count sample per vertex
+					NLT = length(indLT); 
+					Counts(x,y)   = Counts(x,y) + NLT;
+					Counts(x+1,y) = Counts(x+1,y) + NLT;
+					Counts(x,y+1) = Counts(x,y+1) + NLT;
 
-                NUT = length(indUT);
-                Counts(x+1,y)   = Counts(x+1,y) + NUT;
-                Counts(x+1,y+1) = Counts(x+1,y+1) + NUT;
-                Counts(x,y+1)   = Counts(x,y+1) + NUT;
-            end
-        end
-    end
+					NUT = length(indUT);
+					Counts(x+1,y)   = Counts(x+1,y) + NUT;
+					Counts(x+1,y+1) = Counts(x+1,y+1) + NUT;
+					Counts(x,y+1)   = Counts(x,y+1) + NUT;
+				end
+			end
+		end
     
-    NLoutput = reshape(NLoutput, NT, NNx*NNy);
+		NLoutput = reshape(NLoutput, NT, NNx*NNy);
     
-    end % method
+	end % method
         
-    function [sig, trucated_indxs] = truncate_sig(subunit, sig)
-    % truncate stimulus at boundaries of nonlinearity            
+	function [sig, trucated_indxs] = truncate_sig(subunit, sig)
+	% truncate stimulus at boundaries of nonlinearity            
 
-    NLx = subunit.ticks{1};
-    NLy = subunit.ticks{2};
+		NLx = subunit.ticks{1};
+		NLy = subunit.ticks{2};
     
-    if nargout >= 2
-        trucated_indxs = find(sig(:,1) <= NLx(1) | ...
-                              sig(:,2) <= NLy(1) | ...
-                              sig(:,1) >= NLx(end) | ... 
-                              sig(:,2) >= NLy(end));
-    end
+		if nargout >= 2
+			trucated_indxs = find(sig(:,1) <= NLx(1) | sig(:,2) <= NLy(1) | sig(:,1) >= NLx(end) | sig(:,2) >= NLy(end));
+		end
 
-    sig(sig(:,1) <= NLx(1),1) = NLx(1);
-    sig(sig(:,2) <= NLy(1),2) = NLy(1);
-    sig(sig(:,1) >= NLx(end),1) = NLx(end)-1e-7; % move off boundary
-    sig(sig(:,2) >= NLy(end),2) = NLy(end)-1e-7; % move off boundary
+		sig(sig(:,1) <= NLx(1),1) = NLx(1);
+		sig(sig(:,2) <= NLy(1),2) = NLy(1);
+		sig(sig(:,1) >= NLx(end),1) = NLx(end)-1e-7; % move off boundary
+		sig(sig(:,2) >= NLy(end),2) = NLy(end)-1e-7; % move off boundary
 
-    end % method
-    
+	end % method
+
 end
+
 %% *************************** static methods *****************************
 methods (Static)
     
