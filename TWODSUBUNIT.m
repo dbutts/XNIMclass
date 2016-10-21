@@ -197,6 +197,20 @@ methods
     
 	end % method
 
+	function [subunit, mean_gs] = normalize_filters(subunit, stims)
+	% Usage: [subunit, mean_gs] = subunit.normalize_filters(stims);
+
+		gs = subunit.apply_filters( stims );
+		mean_gs = mean(gs);
+		for nn = 1:2
+			nrm = std(gs(:,nn));
+			if nrm > 0
+				subunit.ks{nn} = subunit.ks{nn}/nrm;
+			end
+		end
+    
+	end % method
+
 end
 
 %% *************************** display methods ****************************
@@ -268,20 +282,6 @@ methods (Hidden)
     
 	end % method
     
-	function [subunit, mean_gs] = normalize_filters(subunit, stims)
-	% Usage: [subunit, mean_gs] = subunit.normalize_filters(stims);
-
-		gs = subunit.apply_filters( stims );
-		mean_gs = mean(gs);
-		for nn = 1:2
-			nrm = std(gs(:,nn));
-			if nrm > 0
-				subunit.ks{nn} = subunit.ks{nn}/nrm;
-			end
-		end
-    
-	end % method
-
 	function twoDsub_out = scale_NLaxes( twoDsub, Xstims )
 	% Usage: twoDsub_out = twoDsub.scale_NLaxes( Xstims )
 	
