@@ -306,7 +306,7 @@ end
 %% *************************** helper methods *****************************
 methods
     
-	function xnim = add_2d_subunit( xnim, subunit_1, subunit_2, Xstims, varargin )
+		function xnim = add_2d_subunit( xnim, subunit_1, subunit_2, Xstims, varargin )
 	% Usage: xnim = xnim.add_2d_subunit( subunit_1, subunit_2, Xstims, varargin )
 	% Takes two SUBUNIT inputs (probably from an NIM) and converts them into a TWODSUBUNIT
 	%
@@ -344,7 +344,13 @@ methods
 	
 		% Initialize nonlinearity
 		xnim.twoD_subunits(end) = xnim.twoD_subunits(end).init_NL2d(parsed_options.interaction);
-        
+    
+		% Put in existing filter regularization
+		xnim.twoD_subunits(end).reg_lambdas.d2xt = [subunit_1.reg_lambdas.d2xt subunit_2.reg_lambdas.d2xt];
+		xnim.twoD_subunits(end).reg_lambdas.d2x = [subunit_1.reg_lambdas.d2x subunit_2.reg_lambdas.d2x];
+		xnim.twoD_subunits(end).reg_lambdas.d2t = [subunit_1.reg_lambdas.d2t subunit_2.reg_lambdas.d2t];
+		%xnim.twoD_subunits(end).reg_lambdas.l1 = [subunit_1.reg_lambdas.l1 subunit_2.reg_lambdas.l1];
+		%xnim.twoD_subunits(end).reg_lambdas.l2 = [subunit_1.reg_lambdas.l2 subunit_2.reg_lambdas.l2];
 	end
     
 	function xnim = convert_to_2d_subunit(xnim, sub_indx_1, sub_indx_2, Xstims, varargin)
