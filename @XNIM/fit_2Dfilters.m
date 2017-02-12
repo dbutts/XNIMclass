@@ -239,6 +239,7 @@ filtLen = zeros(Nfit_subs*2,1); % store the length of each (target) sub's two fi
 filtKs = cell(Nfit_subs*2,1); % store the filter coefs for all (target) subs)
 param_inds = cell(Nfit_subs*2,1); % this will store the index values of each subunit's filter coefs within the parameter vector
 Xtarg_set = [xnim.twoD_subunits(fit_subs).Xtargs]; % vector of Xfit_subs for set of subunits being optimized
+un_Xtargs = unique(Xtarg_set);
 
 G = theta + nontarg_g; % initialize overall generating function G with the offset term and the contribution from nontarget subs
 
