@@ -504,6 +504,7 @@ methods
 			dims{2} = xnim.stim_params(xnim.twoD_subunits(nn).Xtargs(2)).dims;
 			xnim.twoD_subunits(nn).display_filter( dims, [Nrows Ncols (nn-1)*Ncols+1], modvarargin{:} );
 			subplot(Nrows, Ncols, (nn-1)*Ncols+3);
+			colormap jet
 			if isempty(mod_outs)
 				xnim.twoD_subunits(nn).display_NL();
 			else

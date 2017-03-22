@@ -14,7 +14,7 @@ end
 %% *************************** constructor ********************************
 methods
 
-	function subunit = TWODSUBUNIT(ks, Xstims, varargin)
+	function sub2d = TWODSUBUNIT( ks, Xstims, varargin )
 	% Usage: sub2d = TWODSUBUNIT(ks, Xstims, varargin)
 	%
 	% INPUTS:
@@ -24,12 +24,14 @@ methods
 	%
 	%   optional arguments:
 	%     'Xtargs': 2x1 array of X-target indices for subunit. Default will be 1 for both
+	%     'nld2': regularization for 2-d nonlinearity
 	%     'Nticks': 2x1 cell array or scalar defining number of ticks/coeffs to represent each dimension.
 	%     'ticks':  2x1 cell array of tick values for each dimension
 
 		% Parse input options
 		defaults.Xtargs = [1 1];
 		defaults.Nticks = {21,21}; % 20 bins
+		defaults.nld2 = 0;
 		[~, parsed_options] = NIM.parse_varargin(varargin, [], defaults);
     
 		% Get proper number of ticks
@@ -43,31 +45,32 @@ methods
 		end
     
 		% Set XNIM properties
-		subunit.NL2d = zeros(Nticks{1}, Nticks{2});
+		sub2d.NL2d = zeros(Nticks{1}, Nticks{2});
     
-		subunit.ks = ks;
+		sub2d.ks = ks;
 		if length(ks) < 2
-			subunit.ks{2} = subunit.ks{1};
-			subunit.ks{2}(3:end) = subunit.ks{1}(1:end-2);
-			subunit.ks{2}(1:2) = 0;
+			sub2d.ks{2} = sub2d.ks{1};
+			sub2d.ks{2}(3:end) = sub2d.ks{1}(1:end-2);
+			sub2d.ks{2}(1:2) = 0;
 		end
     
 		if length(parsed_options.Xtargs) == 1
 			% duplicate scalar values if supplied
-			subunit.Xtargs = parsed_options.Xtargs*[1 1];
+			sub2d.Xtargs = parsed_options.Xtargs*[1 1];
 		else
 			assert(length(parsed_options.Xtargs) == 2, 'Xtargs must be a 2x1 array or scalar')
-			subunit.Xtargs = parsed_options.Xtargs;
+			sub2d.Xtargs = parsed_options.Xtargs;
 		end
     
 		% Establish scale of filters and NL-resolution
-		subunit = subunit.normalize_filters( Xstims );
-		subunit = subunit.scale_NLaxes( Xstims );
+		sub2d = sub2d.normalize_filters( Xstims );
+		sub2d = sub2d.scale_NLaxes( Xstims );
     
-		subunit.reg_lambdas = TWODSUBUNIT.init_reg_lambdas(); % set all to zero
+		sub2d.reg_lambdas = TWODSUBUNIT.init_reg_lambdas(); % set all to zero
+		sub2d.reg_lambdas.nld2 = parsed_options.nld2;
 		%subunit.Ksign_con = {[], []};
-		subunit.Ksign_con = [0 0];
-		subunit.pre_scale = eye(2);
+		sub2d.Ksign_con = [0 0];
+		sub2d.pre_scale = eye(2);
     
 	end % method
     
@@ -216,47 +219,49 @@ end
 %% *************************** display methods ****************************
 methods
     
-    function [] = display_filter(subunit, dims, varargin)
-    % Usage: [] = subunit.display_filter(dims, varargin)
+	function [] = display_filter(subunit, dims, varargin)
+	% Usage: [] = subunit.display_filter(dims, varargin)
     
-    assert((nargin > 1) && ~isempty(dims), 'Must enter filter dimensions.' )
+		assert((nargin > 1) && ~isempty(dims), 'Must enter filter dimensions.' )
 
-    [plotloc, parsed_options, modvarargin] = NIM.parse_varargin(varargin, {'notitle','xt-spatial','xt-separable'});
-    if isempty(plotloc)
-        plotloc = [1 2 1];
-    end
-    assert( plotloc(3) < prod(plotloc(1:2)), 'Invalid plot location.')
+		[plotloc, parsed_options, modvarargin] = NIM.parse_varargin(varargin, {'notitle','xt-spatial','xt-separable'});
+		if isempty(plotloc)
+			plotloc = [1 2 1];
+		end
+		assert( plotloc(3) < prod(plotloc(1:2)), 'Invalid plot location.')
 
-    subplot(plotloc(1), plotloc(2), plotloc(3));
-    if (dims{1}(1) > 1) && (dims{1}(2) > 1)
-        filt = reshape(subunit.ks{1}, dims{1}(1:2));
-        M = max(abs(filt(:)));
-        imagesc(filt, [-M, M]);
-    else
-        plot(subunit.ks{1});
-    end
+		subplot(plotloc(1), plotloc(2), plotloc(3));
+		if (dims{1}(1) > 1) && (dims{1}(2) > 1)
+			filt = reshape(subunit.ks{1}, dims{1}(1:2));
+			M = max(abs(filt(:)));
+			colormap gray
+			imagesc(filt, [-M, M]);
+		else
+			plot(subunit.ks{1});
+		end
 
-    subplot(plotloc(1), plotloc(2), plotloc(3)+1);
-    if (dims{2}(1) > 1) && (dims{2}(2) > 1)
-        imagesc(reshape(subunit.ks{2}, dims{2}(1:2)));
-    else
-        plot(subunit.ks{2});
-    end
+		subplot(plotloc(1), plotloc(2), plotloc(3)+1);
+		if (dims{2}(1) > 1) && (dims{2}(2) > 1)
+			imagesc(reshape(subunit.ks{2}, dims{2}(1:2)));
+			colormap gray
+		else
+			plot(subunit.ks{2});
+		end
+			
+	end % method
 
-    end % method
-
-    function [] = display_NL(subunit, varargin)
-    % Usage: [] = display_NL(subunit, varargin)
+	function [] = display_NL(subunit, varargin)
+	% Usage: [] = display_NL(subunit, varargin)
     
-    M = max(abs(subunit.NL2d(:)));
-    imagesc(subunit.ticks{1}, subunit.ticks{2}, subunit.NL2d', [-M, M])
-    xlabel('X-dir')
-    ylabel('Y-dir')
-    set(gca, 'Ydir', 'normal')
-    colorbar;
-    colormap(jet);
+		M = max(abs(subunit.NL2d(:)));
+		imagesc(subunit.ticks{1}, subunit.ticks{2}, subunit.NL2d', [-M, M])
+		xlabel('X-dir')
+		ylabel('Y-dir')
+		set(gca, 'Ydir', 'normal')
+		colorbar;
+		%colormap(jet);
     
-    end % method
+	end % method
 
 end
 %% *************************** hidden methods *****************************
